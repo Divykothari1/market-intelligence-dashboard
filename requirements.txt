@@ -1,7 +1,9 @@
-yfinance
-pandas
-loguru
-pyarrow
-plotly
 streamlit
-config
+pandas
+numpy
+plotly
+requests
+python-dotenv
+loguru
+nltk
+pyarrow
