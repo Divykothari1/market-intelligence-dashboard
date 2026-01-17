@@ -32,7 +32,7 @@ jobs:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
           python src/ingestion/fetch_prices.py
-          python src/ingestion/fetch_news.py
+          python src/news/fetch_news.py
           python src/transform/build_price_features.py
           python src/transform/classify_market_regime.py
           python src/transform/generate_signals.py
