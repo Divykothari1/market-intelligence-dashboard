@@ -12,10 +12,10 @@ sys.path.append(str(PROJECT_ROOT))
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
-
 from src.news.impact_engine import generate_impact_explanation
+
 # =================================================
-# NIFTY 50 UNIVERSE (STATIC, RELIABLE)
+# NIFTY 50 UNIVERSE (STATIC & RELIABLE)
 # =================================================
 NIFTY_50_SYMBOLS = [
     "ADANIENT", "ADANIPORTS", "APOLLOHOSP", "ASIANPAINT", "AXISBANK",
@@ -29,7 +29,6 @@ NIFTY_50_SYMBOLS = [
     "TATACONSUM", "TATAMOTORS", "TATASTEEL", "TCS", "TECHM",
     "TITAN", "ULTRACEMCO", "UPL", "WIPRO"
 ]
-
 
 # =================================================
 # PATHS
@@ -78,7 +77,7 @@ else:
     st.caption("🕒 Data not updated yet")
 
 # =================================================
-# CACHE INVALIDATION KEY
+# CACHE INVALIDATION KEY (CRITICAL)
 # =================================================
 def get_latest_signal_timestamp():
     files = list(SIGNAL_DIR.glob("*.parquet"))
@@ -93,13 +92,14 @@ LATEST_TS = get_latest_signal_timestamp()
 # =================================================
 @st.cache_data(show_spinner=False)
 def load_signal_data(latest_ts):
-    _ = latest_ts  # cache dependency
+    _ = latest_ts  # force cache refresh
 
     rows = []
     available = set()
 
     for symbol in NIFTY_50_SYMBOLS:
-        file_path = SIGNAL_DIR / f"{symbol}.parquet"
+        file_path = SIGNAL_DIR / f"{symbol}.parquet"  # ✅ FIXED (NO .NS)
+
         if not file_path.exists():
             continue
 
@@ -112,7 +112,7 @@ def load_signal_data(latest_ts):
         available.add(symbol)
 
         rows.append({
-            "Stock": symbol.replace(".NS", ""),
+            "Stock": symbol,
             "Date": pd.to_datetime(latest["Date"]).date(),
             "Market Regime": latest["market_regime"],
             "Signal": latest["signal_label"],
@@ -136,7 +136,7 @@ if df_overview.empty:
 df_overview = df_overview.sort_values(
     by=["Date", "Stock"],
     ascending=[False, True]
-)
+).reset_index(drop=True)  # ✅ removes ugly numbering
 
 latest_date = df_overview["Date"].max()
 oldest_date = df_overview["Date"].min()
@@ -150,12 +150,9 @@ st.info(
 )
 
 if missing_stocks:
-    st.warning(
-        "⚠️ Missing stocks: "
-        + ", ".join(s.replace(".NS", "") for s in missing_stocks)
-    )
+    st.warning("⚠️ Missing stocks: " + ", ".join(missing_stocks))
 
-st.dataframe(df_overview, use_container_width=True)
+st.dataframe(df_overview, use_container_width=True, hide_index=True)
 
 # =================================================
 # 📈 STOCK DETAIL
@@ -168,7 +165,7 @@ selected_stock = st.selectbox(
     df_overview["Stock"].unique()
 )
 
-stock_file = SIGNAL_DIR / f"{selected_stock}.NS.parquet"
+stock_file = SIGNAL_DIR / f"{selected_stock}.parquet"  # ✅ FIXED
 df_stock = pd.read_parquet(stock_file).sort_values("Date")
 latest = df_stock.iloc[-1]
 
