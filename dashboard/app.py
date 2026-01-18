@@ -12,7 +12,9 @@ sys.path.append(str(PROJECT_ROOT))
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
+
 from src.news.impact_engine import generate_impact_explanation
+from src.config.nifty50_symbols import NIFTY_50_SYMBOLS
 
 # =================================================
 # PATHS
@@ -32,14 +34,14 @@ st.title("📊 Market Intelligence Dashboard (Daily)")
 st.caption("End-of-day market regime, signals, and news intelligence")
 
 # =================================================
-# 🔄 MANUAL REFRESH (SAFE + SUPPORTED)
+# 🔄 MANUAL REFRESH
 # =================================================
 if st.button("🔄 Refresh Data"):
     st.cache_data.clear()
     st.rerun()
 
 # =================================================
-# 🕒 LAST UPDATED (PIPELINE TIME)
+# 🕒 PIPELINE LAST RUN TIME
 # =================================================
 IST = pytz.timezone("Asia/Kolkata")
 
@@ -48,8 +50,7 @@ def get_last_updated_time():
     if not files:
         return None
     latest_file = max(files, key=lambda f: f.stat().st_mtime)
-    ts = datetime.fromtimestamp(latest_file.stat().st_mtime, tz=IST)
-    return ts
+    return datetime.fromtimestamp(latest_file.stat().st_mtime, tz=IST)
 
 last_updated_ts = get_last_updated_time()
 
@@ -62,7 +63,7 @@ else:
     st.caption("🕒 Data not updated yet")
 
 # =================================================
-# CACHE INVALIDATION KEY (CRITICAL FIX)
+# CACHE INVALIDATION KEY
 # =================================================
 def get_latest_signal_timestamp():
     files = list(SIGNAL_DIR.glob("*.parquet"))
@@ -73,32 +74,40 @@ def get_latest_signal_timestamp():
 LATEST_TS = get_latest_signal_timestamp()
 
 # =================================================
-# LOAD SIGNAL DATA (OVERVIEW)
+# LOAD OVERVIEW DATA (NIFTY 50 ENFORCED)
 # =================================================
 @st.cache_data(show_spinner=False)
 def load_signal_data(latest_ts):
-    _ = latest_ts  # 👈 force cache dependency
+    _ = latest_ts  # cache dependency
 
     rows = []
-    for file_path in SIGNAL_DIR.glob("*.parquet"):
+    available = set()
+
+    for symbol in NIFTY_50_SYMBOLS:
+        file_path = SIGNAL_DIR / f"{symbol}.parquet"
+        if not file_path.exists():
+            continue
+
         df = pd.read_parquet(file_path)
         if df.empty:
             continue
 
         df = df.sort_values("Date")
         latest = df.iloc[-1]
+        available.add(symbol)
 
         rows.append({
-            "Stock": file_path.stem.replace(".NS", ""),
+            "Stock": symbol.replace(".NS", ""),
             "Date": pd.to_datetime(latest["Date"]).date(),
             "Market Regime": latest["market_regime"],
             "Signal": latest["signal_label"],
             "Strength": latest["signal_strength"]
         })
 
-    return pd.DataFrame(rows)
+    missing = sorted(set(NIFTY_50_SYMBOLS) - available)
+    return pd.DataFrame(rows), missing
 
-df_overview = load_signal_data(LATEST_TS)
+df_overview, missing_stocks = load_signal_data(LATEST_TS)
 
 # =================================================
 # 📌 MARKET OVERVIEW
@@ -106,34 +115,30 @@ df_overview = load_signal_data(LATEST_TS)
 st.subheader("📌 Market Overview")
 
 if df_overview.empty:
-    st.warning(
-        "⚠️ No signal data available.\n\n"
-        "- Market closed\n"
-        "- Pipeline still running\n"
-        "- First-time setup"
-    )
+    st.warning("⚠️ No signal data available yet.")
     st.stop()
 
-# ✅ Proper sorting (FIXED)
 df_overview = df_overview.sort_values(
     by=["Date", "Stock"],
     ascending=[False, True]
 )
 
-latest_trade_date = df_overview["Date"].max()
-oldest_trade_date = df_overview["Date"].min()
+latest_date = df_overview["Date"].max()
+oldest_date = df_overview["Date"].min()
 
 st.success("🟢 Pipeline status: Healthy")
+
 st.info(
-    f"📅 **Data coverage:** {oldest_trade_date} → {latest_trade_date}  \n"
-    "Some stocks may show older dates due to non-trading days or data availability."
+    f"📅 **Data coverage:** {oldest_date} → {latest_date}\n\n"
+    f"📊 **Coverage:** {len(df_overview)}/{len(NIFTY_50_SYMBOLS)} NIFTY stocks\n\n"
+    "ℹ️ Some stocks may show older dates due to non-trading days or data availability."
 )
 
-# ✅ NIFTY 50 coverage check
-EXPECTED = 50
-actual = len(df_overview)
-if actual < EXPECTED:
-    st.warning(f"⚠️ Coverage: {actual}/{EXPECTED} NIFTY stocks available")
+if missing_stocks:
+    st.warning(
+        "⚠️ Missing stocks: "
+        + ", ".join(s.replace(".NS", "") for s in missing_stocks)
+    )
 
 st.dataframe(df_overview, use_container_width=True)
 
@@ -159,8 +164,8 @@ st.divider()
 st.subheader("📰 Latest News (Last 7 Days)")
 
 news_file = NEWS_DIR / f"{selected_stock}.parquet"
-latest_sentiment, latest_confidence = "Neutral", 0
 df_news = pd.DataFrame()
+latest_sentiment, latest_confidence = "Neutral", 0
 
 if news_file.exists():
     df_news = pd.read_parquet(news_file)
