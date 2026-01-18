@@ -1,9 +1,10 @@
 name: Daily Market Intelligence Pipeline
 
 on:
-  workflow_dispatch:
   schedule:
-  - cron: "30 13 * * 1-5"
+    - cron: "30 15 * * 1-5"   # 9:00 PM IST (15:30 UTC)
+  workflow_dispatch:
+
 
 
 jobs:
