@@ -14,7 +14,22 @@ import pandas as pd
 import plotly.graph_objects as go
 
 from src.news.impact_engine import generate_impact_explanation
-from src.config.nifty50_symbols import NIFTY_50_SYMBOLS
+# =================================================
+# NIFTY 50 UNIVERSE (STATIC, RELIABLE)
+# =================================================
+NIFTY_50_SYMBOLS = [
+    "ADANIENT", "ADANIPORTS", "APOLLOHOSP", "ASIANPAINT", "AXISBANK",
+    "BAJAJ-AUTO", "BAJAJFINSV", "BAJFINANCE", "BHARTIARTL", "BPCL",
+    "BRITANNIA", "CIPLA", "COALINDIA", "DIVISLAB", "DRREDDY",
+    "EICHERMOT", "GRASIM", "HCLTECH", "HDFCBANK", "HDFCLIFE",
+    "HEROMOTOCO", "HINDALCO", "HINDUNILVR", "ICICIBANK", "ITC",
+    "INDUSINDBK", "INFY", "JSWSTEEL", "KOTAKBANK", "LT",
+    "M&M", "MARUTI", "NESTLEIND", "NTPC", "ONGC",
+    "POWERGRID", "RELIANCE", "SBILIFE", "SBIN", "SUNPHARMA",
+    "TATACONSUM", "TATAMOTORS", "TATASTEEL", "TCS", "TECHM",
+    "TITAN", "ULTRACEMCO", "UPL", "WIPRO"
+]
+
 
 # =================================================
 # PATHS
