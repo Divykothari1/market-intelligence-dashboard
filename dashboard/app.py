@@ -15,7 +15,7 @@ import plotly.graph_objects as go
 from src.news.impact_engine import generate_impact_explanation
 
 # =================================================
-# NIFTY 50 UNIVERSE (STATIC & RELIABLE)
+# NIFTY 50 UNIVERSE (CANONICAL SYMBOLS – NO .NS)
 # =================================================
 NIFTY_50_SYMBOLS = [
     "ADANIENT", "ADANIPORTS", "APOLLOHOSP", "ASIANPAINT", "AXISBANK",
@@ -39,10 +39,7 @@ NEWS_DIR = Path("data/processed/news")
 # =================================================
 # STREAMLIT CONFIG
 # =================================================
-st.set_page_config(
-    page_title="Market Intelligence Dashboard",
-    layout="wide"
-)
+st.set_page_config(page_title="Market Intelligence Dashboard", layout="wide")
 
 st.title("📊 Market Intelligence Dashboard (Daily)")
 st.caption("End-of-day market regime, signals, and news intelligence")
@@ -63,8 +60,8 @@ def get_last_updated_time():
     files = list(SIGNAL_DIR.glob("*.parquet"))
     if not files:
         return None
-    latest_file = max(files, key=lambda f: f.stat().st_mtime)
-    return datetime.fromtimestamp(latest_file.stat().st_mtime, tz=IST)
+    latest = max(files, key=lambda f: f.stat().st_mtime)
+    return datetime.fromtimestamp(latest.stat().st_mtime, tz=IST)
 
 last_updated_ts = get_last_updated_time()
 
@@ -77,28 +74,28 @@ else:
     st.caption("🕒 Data not updated yet")
 
 # =================================================
-# CACHE INVALIDATION KEY (CRITICAL)
+# CACHE INVALIDATION KEY
 # =================================================
-def get_latest_signal_timestamp():
+def latest_signal_ts():
     files = list(SIGNAL_DIR.glob("*.parquet"))
     if not files:
         return 0
     return max(f.stat().st_mtime for f in files)
 
-LATEST_TS = get_latest_signal_timestamp()
+LATEST_TS = latest_signal_ts()
 
 # =================================================
-# LOAD OVERVIEW DATA (NIFTY 50 ENFORCED)
+# LOAD OVERVIEW DATA (STRICT .NS FILES)
 # =================================================
 @st.cache_data(show_spinner=False)
-def load_signal_data(latest_ts):
-    _ = latest_ts  # force cache refresh
+def load_signal_data(ts):
+    _ = ts  # force cache dependency
 
     rows = []
     available = set()
 
     for symbol in NIFTY_50_SYMBOLS:
-        file_path = SIGNAL_DIR / f"{symbol}.parquet"  # ✅ FIXED (NO .NS)
+        file_path = SIGNAL_DIR / f"{symbol}.NS.parquet"  # ✅ CORRECT
 
         if not file_path.exists():
             continue
@@ -133,10 +130,11 @@ if df_overview.empty:
     st.warning("⚠️ No signal data available yet.")
     st.stop()
 
-df_overview = df_overview.sort_values(
-    by=["Date", "Stock"],
-    ascending=[False, True]
-).reset_index(drop=True)  # ✅ removes ugly numbering
+df_overview = (
+    df_overview
+    .sort_values(by=["Date", "Stock"], ascending=[False, True])
+    .reset_index(drop=True)
+)
 
 latest_date = df_overview["Date"].max()
 oldest_date = df_overview["Date"].min()
@@ -145,7 +143,7 @@ st.success("🟢 Pipeline status: Healthy")
 
 st.info(
     f"📅 **Data coverage:** {oldest_date} → {latest_date}\n\n"
-    f"📊 **Coverage:** {len(df_overview)}/{len(NIFTY_50_SYMBOLS)} NIFTY stocks\n\n"
+    f"📊 **Coverage:** {len(df_overview)}/50 NIFTY stocks\n\n"
     "ℹ️ Some stocks may show older dates due to non-trading days or data availability."
 )
 
@@ -160,12 +158,9 @@ st.dataframe(df_overview, use_container_width=True, hide_index=True)
 st.divider()
 st.subheader("📈 Stock Detail View")
 
-selected_stock = st.selectbox(
-    "Select a stock",
-    df_overview["Stock"].unique()
-)
+selected_stock = st.selectbox("Select a stock", df_overview["Stock"].unique())
 
-stock_file = SIGNAL_DIR / f"{selected_stock}.parquet"  # ✅ FIXED
+stock_file = SIGNAL_DIR / f"{selected_stock}.NS.parquet"  # ✅ CORRECT
 df_stock = pd.read_parquet(stock_file).sort_values("Date")
 latest = df_stock.iloc[-1]
 
@@ -219,11 +214,7 @@ st.info(generate_impact_explanation(
 # =================================================
 st.subheader("📈 Price Chart")
 
-chart_type = st.radio(
-    "Chart Type",
-    ["Line Chart", "Candlestick"],
-    horizontal=True
-)
+chart_type = st.radio("Chart Type", ["Line Chart", "Candlestick"], horizontal=True)
 
 fig = go.Figure()
 
