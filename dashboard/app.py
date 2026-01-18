@@ -32,14 +32,14 @@ st.title("📊 Market Intelligence Dashboard (Daily)")
 st.caption("End-of-day market regime, signals, and news intelligence")
 
 # =================================================
-# 🔄 MANUAL REFRESH (CRITICAL)
+# 🔄 MANUAL REFRESH (SAFE + SUPPORTED)
 # =================================================
 if st.button("🔄 Refresh Data"):
     st.cache_data.clear()
     st.rerun()
 
 # =================================================
-# 🕒 LAST UPDATED (EOD)
+# 🕒 LAST UPDATED (PIPELINE TIME)
 # =================================================
 IST = pytz.timezone("Asia/Kolkata")
 
@@ -49,20 +49,20 @@ def get_last_updated_time():
         return None
     latest_file = max(files, key=lambda f: f.stat().st_mtime)
     ts = datetime.fromtimestamp(latest_file.stat().st_mtime, tz=IST)
-    return ts.strftime("%d %b %Y, %I:%M %p IST")
+    return ts
 
-last_updated = get_last_updated_time()
+last_updated_ts = get_last_updated_time()
 
-if last_updated:
+if last_updated_ts:
     st.caption(
-        f"🕒 **Last updated:** {last_updated}  |  "
-        f"⚙️ **Source:** GitHub Actions (Automated EOD Pipeline)"
+        f"🕒 **Pipeline run:** {last_updated_ts.strftime('%d %b %Y, %I:%M %p IST')}  |  "
+        f"⚙️ **Source:** GitHub Actions (Automated EOD)"
     )
 else:
-    st.caption("🕒 Data not updated yet (pipeline not run or market closed)")
+    st.caption("🕒 Data not updated yet")
 
 # =================================================
-# CACHE INVALIDATION KEY (IMPORTANT)
+# CACHE INVALIDATION KEY (CRITICAL FIX)
 # =================================================
 def get_latest_signal_timestamp():
     files = list(SIGNAL_DIR.glob("*.parquet"))
@@ -77,8 +77,9 @@ LATEST_TS = get_latest_signal_timestamp()
 # =================================================
 @st.cache_data(show_spinner=False)
 def load_signal_data(latest_ts):
-    rows = []
+    _ = latest_ts  # 👈 force cache dependency
 
+    rows = []
     for file_path in SIGNAL_DIR.glob("*.parquet"):
         df = pd.read_parquet(file_path)
         if df.empty:
@@ -106,16 +107,35 @@ st.subheader("📌 Market Overview")
 
 if df_overview.empty:
     st.warning(
-        "⚠️ No signal data available yet.\n\n"
-        "- Weekend / holiday\n"
-        "- First-time setup\n"
-        "- Pipeline still running\n\n"
-        "✅ System is fully automated."
+        "⚠️ No signal data available.\n\n"
+        "- Market closed\n"
+        "- Pipeline still running\n"
+        "- First-time setup"
     )
     st.stop()
 
+# ✅ Proper sorting (FIXED)
+df_overview = df_overview.sort_values(
+    by=["Date", "Stock"],
+    ascending=[False, True]
+)
+
+latest_trade_date = df_overview["Date"].max()
+oldest_trade_date = df_overview["Date"].min()
+
 st.success("🟢 Pipeline status: Healthy")
-st.dataframe(df_overview.sort_values("Stock"), use_container_width=True)
+st.info(
+    f"📅 **Data coverage:** {oldest_trade_date} → {latest_trade_date}  \n"
+    "Some stocks may show older dates due to non-trading days or data availability."
+)
+
+# ✅ NIFTY 50 coverage check
+EXPECTED = 50
+actual = len(df_overview)
+if actual < EXPECTED:
+    st.warning(f"⚠️ Coverage: {actual}/{EXPECTED} NIFTY stocks available")
+
+st.dataframe(df_overview, use_container_width=True)
 
 # =================================================
 # 📈 STOCK DETAIL
@@ -125,7 +145,7 @@ st.subheader("📈 Stock Detail View")
 
 selected_stock = st.selectbox(
     "Select a stock",
-    df_overview["Stock"].sort_values().unique()
+    df_overview["Stock"].unique()
 )
 
 stock_file = SIGNAL_DIR / f"{selected_stock}.NS.parquet"
